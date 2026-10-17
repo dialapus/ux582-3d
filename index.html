@@ -1,0 +1,229 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light">
+<title>ASUS Zenbook Pro Duo 15 OLED UX582 — Studio View</title>
+<link rel="icon" href="data:,">
+<style>
+  :root { color-scheme: light; }
+  html,body { margin:0; width:100%; height:100%; overflow:hidden;
+    background:#f5f6f7; }
+  body { display:grid; place-items:center; }
+  #stage { width:min(100vw,100vh); height:min(100vw,100vh); overflow:hidden;
+    background:#f8f9fa; position:relative; }
+  canvas { display:block; width:100%; height:100%; outline:none; }
+  #error { display:none; position:absolute; left:1rem; right:1rem; bottom:1rem;
+    padding:1rem; color:#731b21; background:#fff5f5; border:1px solid #dfaaaa;
+    font:14px/1.5 system-ui,sans-serif; overflow-wrap:anywhere; }
+</style>
+<script type="importmap">
+{"imports":{
+  "three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+  "three/addons/":"https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+}}
+</script>
+</head>
+<body>
+<div id="stage" aria-label="Interactive 3D model of Zenbook UX582">
+  <div id="error" role="alert"></div>
+</div>
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
+
+window.READY = false;
+const stage = document.getElementById('stage');
+const params = new URLSearchParams(location.search);
+const view = (params.get('view') || 'hero').toLowerCase();
+const frame = params.get('frame');
+const degrees = params.get('angle');
+const renderer = new THREE.WebGLRenderer({
+  antialias: true, alpha: false, powerPreference: 'high-performance',
+  preserveDrawingBuffer: true
+});
+renderer.setClearColor('#f6f7f8', 1);
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 0.93;
+renderer.shadowMap.enabled = false;
+renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+stage.prepend(renderer.domElement);
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0xf6f7f8);
+const camera = new THREE.OrthographicCamera(-0.285, 0.285, 0.285, -0.285, 0.01, 12);
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true;
+controls.dampingFactor = 0.10;
+controls.enablePan = false;
+controls.minZoom = 0.65;
+controls.maxZoom = 4.5;
+controls.maxPolarAngle = Math.PI * 0.96;
+controls.target.set(0, 0.132, -0.014);
+
+function cameraPreset() {
+  if (frame !== null && /^\d+$/.test(frame)) {
+    const a = 2*Math.PI*(Math.max(0, Math.min(179, Number(frame))) / 180);
+    camera.position.set(0.86*Math.sin(a), 0.33, 0.86*Math.cos(a));
+    controls.target.set(0, 0.133, -0.014);
+  } else if (degrees !== null && Number.isFinite(Number(degrees))) {
+    const a = Number(degrees)*Math.PI/180;
+    camera.position.set(0.86*Math.sin(a), 0.33, 0.86*Math.cos(a));
+    controls.target.set(0, 0.133, -0.014);
+  } else if (view === 'side') {
+    camera.position.set(-0.93, 0.195, 0.00);
+    controls.target.set(0, 0.125, -0.012);
+  } else if (view === 'top') {
+    camera.position.set(-0.015, 0.98, 0.14);
+    controls.target.set(0, 0.025, 0.005);
+    camera.zoom = 1.32;
+    camera.up.set(0, 0, -1);
+  } else {
+    camera.position.set(-0.62, 0.405, 0.77);
+    controls.target.set(0, 0.132, -0.023);
+  }
+  camera.lookAt(controls.target);
+  controls.update();
+}
+cameraPreset();
+window.CAPTURE_SET_FRAME = (frameIndex) => {
+  const a = 2 * Math.PI * ((frameIndex % 180 + 180) % 180 / 180);
+  controls.target.set(0,0.133,-0.014);
+  camera.up.set(0,1,0);
+  camera.position.set(0.86*Math.sin(a),0.33,0.86*Math.cos(a));
+  camera.lookAt(controls.target);
+  controls.update();
+};
+
+scene.add(new THREE.HemisphereLight(0xffffff, 0x8d9aa2, 1.25));
+const key = new THREE.DirectionalLight(0xffffff, 3.0);
+key.position.set(-0.35, 0.9, 0.68); key.intensity=1.75; scene.add(key);
+const rim = new THREE.DirectionalLight(0xc9e5ff, 2.0);
+rim.position.set(0.6, 0.65, -0.63); rim.intensity=0.95; scene.add(rim);
+const fill = new THREE.DirectionalLight(0xffe7d5, 0.9);
+fill.position.set(0.7, 0.32, 0.9); fill.intensity=0.45; scene.add(fill);
+
+// A reflection room produces broad softbox highlights on dark brushed aluminium.
+try {
+  const pmrem = new THREE.PMREMGenerator(renderer);
+  scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.035).texture;
+  pmrem.dispose();
+} catch (e) { console.warn('Studio reflection fallback', e); }
+
+// Clean contact shadow instead of an expensive GPU shadow pass.
+const shadowCanvas = document.createElement('canvas');
+shadowCanvas.width=256; shadowCanvas.height=256;
+const ctx = shadowCanvas.getContext('2d');
+const gradient = ctx.createRadialGradient(128,128,8,128,128,126);
+gradient.addColorStop(0, 'rgba(35,45,52,0.34)');
+gradient.addColorStop(0.34, 'rgba(40,48,55,0.23)');
+gradient.addColorStop(0.71, 'rgba(56,63,69,0.07)');
+gradient.addColorStop(1, 'rgba(56,63,69,0)');
+ctx.fillStyle=gradient;ctx.fillRect(0,0,256,256);
+const shadowTexture = new THREE.CanvasTexture(shadowCanvas);
+shadowTexture.colorSpace=THREE.SRGBColorSpace;
+const shadow = new THREE.Mesh(
+  new THREE.PlaneGeometry(0.64,0.60),
+  new THREE.MeshBasicMaterial({map:shadowTexture, transparent:true,
+                              depthWrite:false, opacity:0.86, side:THREE.DoubleSide})
+);
+shadow.rotation.x=-Math.PI/2;shadow.position.set(0,-0.011,0.015);
+scene.add(shadow);
+
+let model = null;
+let firstRenderPending = false;
+function resize() {
+  const s = Math.max(1,Math.min(stage.clientWidth,stage.clientHeight));
+  renderer.setSize(s,s,false);
+  camera.updateProjectionMatrix();
+}
+window.addEventListener('resize', resize, {passive:true});
+resize();
+function render() {
+  controls.update();
+  renderer.render(scene,camera);
+}
+function loop() {
+  requestAnimationFrame(loop);
+  render();
+  if (firstRenderPending) {
+    firstRenderPending = false;
+    window.READY=true;
+    document.body.classList.add('ready');
+    console.log('UX582_READY', {objects:model?.children.length, camera:camera.position.toArray()});
+  }
+}
+loop();
+
+new GLTFLoader().load('./ux582.glb',
+  (gltf)=>{
+    model=gltf.scene;
+    window.MODEL=model;
+    // The file is authored in metres: preserve every hinge and ScreenPad pivot.
+    scene.add(model);
+    model.traverse((obj)=>{
+      if(obj.isMesh) {
+        obj.frustumCulled = false;
+        if(obj.material) {
+          // Keep OLED vivid while treating painted frame as physically based metal.
+          if(obj.material.name==='oled_screen'){
+            // OLED photons should not receive diffuse studio lighting;
+            // render the embedded ribbon texture with faithful sRGB color.
+            const oledMap = obj.material.map;
+            obj.material = new THREE.MeshBasicMaterial({
+              map: oledMap, color:0xffffff,
+              side:THREE.DoubleSide, toneMapped:false
+            });
+          }
+        }
+      }
+    });
+    // Retain the complete original GLTF scene graph and named pivots, but
+    // display a batched static copy for much faster SwiftShader turntables.
+    // Transform geometries to world space before merging by PBR material.
+    try {
+      model.updateMatrixWorld(true);
+      const buckets = new Map();
+      model.traverse((obj)=>{
+        if(!obj.isMesh || !obj.geometry || !obj.material)return;
+        const key=obj.material.uuid;
+        if(!buckets.has(key))buckets.set(key,{material:obj.material,geometries:[]});
+        buckets.get(key).geometries.push(obj.geometry.clone().applyMatrix4(obj.matrixWorld));
+      });
+      const batchRoot=new THREE.Group();
+      batchRoot.name='webgl_drawcall_batches';
+      let mergedCount=0;
+      for(const bucket of buckets.values()){
+        const geom=mergeGeometries(bucket.geometries,false);
+        if(!geom)throw new Error('mergeGeometries incompatible mesh format');
+        const mesh=new THREE.Mesh(geom,bucket.material);
+        mesh.frustumCulled=false;
+        batchRoot.add(mesh);
+        mergedCount++;
+        for(const sourceGeom of bucket.geometries)sourceGeom.dispose();
+      }
+      scene.add(batchRoot);
+      model.visible=false;
+      console.log('UX582_BATCHED',mergedCount,'draw calls from',window.MODEL.children.length,'GLB root nodes');
+    }catch(e){ console.warn('UX582 batch fallback',e); }
+    firstRenderPending=true;
+  },
+  (progress)=>{
+    if(progress.total>0)window.LOAD_PROGRESS=progress.loaded/progress.total;
+  },
+  (err)=>{
+    console.error('UX582_GLTF_ERROR',err);
+    window.ERROR = String(err);
+    const alert=document.getElementById('error');
+    alert.style.display='block';
+    alert.textContent='The model could not be loaded: '+String(err);
+  }
+);
+</script>
+</body>
+</html>
